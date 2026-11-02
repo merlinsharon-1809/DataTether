@@ -1,0 +1,204 @@
+"""
+ai_explainer.py
+
+AI interpretation and explainability engine for DataTether.
+Synthesizes verified findings from Phases 1-5 into plain-English explanations,
+uncertainty caveats, and actionable DPO recommendations.
+
+Dual-mode architecture:
+1. Meta AI API: Attempts live inference if META_AI_API_KEY is configured.
+2. Deterministic Fallback: Generates evidence-grounded synthesis if no API key is provided
+   or if network/model call fails. No hallucinations, no fabricated claims.
+"""
+
+import json
+import os
+import urllib.request
+import urllib.error
+from app.schemas.investigation import AIModelInfo
+
+
+def _call_meta_ai(prompt: str, api_key: str, endpoint: str | None = None) -> list[str] | None:
+    """
+    Safely query Meta AI endpoint (or OpenAI-compatible Llama / Muse Spark endpoint).
+    Returns list of interpretation bullet points, or None if the call fails.
+    """
+    url = endpoint or os.getenv("META_AI_ENDPOINT", "https://api.meta.ai/v1/chat/completions")
+    payload = {
+        "model": "meta-muse-spark",
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are the DataTether AI Governance Explainer. Your job is to explain "
+                    "verified security, privacy, and policy findings to a Data Protection Officer. "
+                    "Rules: Never invent dataset attributes or facts. Never claim a data breach "
+                    "without proof. Distinguish detected facts from potential risks. "
+                    "Output a valid JSON array of strings explaining the key findings in plain English."
+                )
+            },
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.2
+    }
+
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            content = body["choices"][0]["message"]["content"]
+            parsed = json.loads(content)
+            if isinstance(parsed, list):
+                return [str(item) for item in parsed]
+            return [content]
+    except Exception:
+        # Fall back gracefully to deterministic explainer
+        return None
+
+
+def _generate_deterministic_interpretation(
+    objective: str,
+    datasets: list,
+    combination_result: dict | None,
+    privacy_result: dict | None,
+    policy_results: list[dict],
+    lineage_results: list[dict]
+) -> list[str]:
+    """
+    Deterministic synthesis grounded 100% in backend facts.
+    """
+    interpretations = []
+
+    # 1. Dataset Scope Synthesis
+    names = [ds.name for ds in datasets]
+    classifications = sorted(set(ds.classification for ds in datasets))
+    interpretations.append(
+        f"Investigation evaluated {len(datasets)} dataset(s): {', '.join(names)} "
+        f"carrying sensitivity classification(s) [{', '.join(classifications)}]."
+    )
+
+    # 2. Combination & Governance Interpretation
+    if combination_result:
+        dec = combination_result.get("decision")
+        findings = combination_result.get("findings", [])
+        if dec == "RESTRICTED":
+            interpretations.append(
+                f"Combination Governance Engine determined state RESTRICTED: The proposed purpose conflicts "
+                f"with negative covenants or sharing prohibitions in the registered Data Passports."
+            )
+        elif dec == "REQUIRES_REVIEW":
+            interpretations.append(
+                f"Combination Governance Engine determined state REQUIRES_REVIEW: Purpose is unlisted or "
+                f"governance asymmetries (classification, encryption, or region) were detected."
+            )
+        else:
+            interpretations.append(
+                "Combination Governance Engine determined state PERMITTED: Data Passports indicate full "
+                "purpose alignment across all candidate datasets."
+            )
+
+        for f in findings:
+            cat = f.category if hasattr(f, "category") else f.get("category", "")
+            detail = f.detail if hasattr(f, "detail") else f.get("detail", "")
+            if cat == "Classification Mismatch":
+                interpretations.append(
+                    f"Asymmetric sensitivity: Combining these datasets elevates the aggregate classification "
+                    f"to the most restrictive level, requiring heightened access controls."
+                )
+            elif cat == "Encryption Mismatch":
+                interpretations.append(
+                    f"Cryptographic exposure: Mixing encrypted with unencrypted sources risks exposing protected "
+                    f"attributes in intermediate transit or unencrypted cache memory."
+                )
+
+    # 3. Privacy Risks Interpretation
+    if privacy_result:
+        risks = privacy_result.get("risks", [])
+        sensitive_count = sum(1 for r in risks if (r.status if hasattr(r, 'status') else r.get('status')) == "DETECTED")
+        potential_count = sum(1 for r in risks if (r.status if hasattr(r, 'status') else r.get('status')) == "POTENTIAL")
+
+        if sensitive_count > 0:
+            interpretations.append(
+                f"Direct Privacy Exposure: {sensitive_count} sensitive attribute category(ies) detected in schema. "
+                f"Exposing these attributes under unapproved processing creates regulatory non-compliance."
+            )
+        if potential_count > 0:
+            interpretations.append(
+                f"Re-identification Surface: Accumulation of indirect identifiers (e.g. demographic or location attributes) "
+                f"creates a potential linkage surface that could narrow down individual identities."
+            )
+
+    # 4. Policy & Operation Interpretation
+    for pol in policy_results:
+        violated = pol.get("violated_rules", [])
+        if violated:
+            interpretations.append(
+                f"Policy Gate Blocked: {violated[0]}"
+            )
+
+    # 5. Lineage Synthesis
+    if lineage_results:
+        downstream_total = sum(l.get("downstream_count", 0) for l in lineage_results)
+        if downstream_total > 0:
+            interpretations.append(
+                f"Downstream Lineage Impact: Found {downstream_total} dependent derived dataset(s) "
+                f"that would inherit any policy or sensitivity restrictions."
+            )
+
+    return interpretations
+
+
+def explain_investigation(
+    objective: str,
+    datasets: list,
+    combination_result: dict | None,
+    privacy_result: dict | None,
+    policy_results: list[dict],
+    lineage_results: list[dict]
+) -> tuple[list[str], AIModelInfo]:
+    """
+    Generates plain-English interpretation for the investigation.
+    Returns (interpretations, ai_model_info).
+    """
+    api_key = os.getenv("META_AI_API_KEY")
+
+    if api_key and api_key.strip():
+        # Attempt live Meta AI call
+        prompt = (
+            f"Objective: {objective}\n"
+            f"Datasets: {[ds.name for ds in datasets]}\n"
+            f"Governance Decision: {combination_result.get('decision') if combination_result else 'N/A'}\n"
+            f"Governance Findings: {[f.detail if hasattr(f, 'detail') else f.get('detail') for f in (combination_result.get('findings') if combination_result else [])]}\n"
+            f"Privacy Risks: {[r.detail if hasattr(r, 'detail') else r.get('detail') for r in (privacy_result.get('risks') if privacy_result else [])]}\n"
+            f"Policy Violations: {[v for pol in policy_results for v in pol.get('violated_rules', [])]}"
+        )
+        ai_resp = _call_meta_ai(prompt, api_key)
+        if ai_resp:
+            return ai_resp, AIModelInfo(
+                provider="META_AI",
+                model_name="Meta Muse Spark",
+                is_live_call=True,
+                fallback_reason=None
+            )
+
+    # Deterministic fallback
+    deterministic_resp = _generate_deterministic_interpretation(
+        objective=objective,
+        datasets=datasets,
+        combination_result=combination_result,
+        privacy_result=privacy_result,
+        policy_results=policy_results,
+        lineage_results=lineage_results
+    )
+    fallback_reason = "META_AI_API_KEY not configured or offline; deterministic ground-truth synthesis engaged."
+    return deterministic_resp, AIModelInfo(
+        provider="DETERMINISTIC_FALLBACK",
+        model_name="Deterministic Governance Explainer",
+        is_live_call=False,
+        fallback_reason=fallback_reason
+    )

@@ -1,0 +1,27 @@
+# Environments & Secrets
+.env
+.env.*
+!.env.example
+.venv/
+env/
+venv/
+
+# Dependencies & Build
+node_modules/
+dist/
+__pycache__/
+*.pyc
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# SQLite Databases (runtime data — not for version control)
+*.db
+*.sqlite
+*.sqlite3
+
+# Development scratch files
+scratch/
