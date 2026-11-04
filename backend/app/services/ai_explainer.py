@@ -37,11 +37,12 @@ def _call_meta_ai(prompt: str, api_key: str, endpoint: str | None = None) -> lis
                     "verified security, privacy, and policy findings to a Data Protection Officer. "
                     "Rules: Never invent dataset attributes or facts. Never claim a data breach "
                     "without proof. Distinguish detected facts from potential risks. "
-                    "Output a valid JSON array of strings explaining the key findings in plain English."
+                    "Output a concise JSON array of strings explaining the key findings in plain English."
                 )
             },
             {"role": "user", "content": prompt}
         ],
+        "max_completion_tokens": 4096,
         "temperature": 0.2
     }
 
@@ -52,7 +53,7 @@ def _call_meta_ai(prompt: str, api_key: str, endpoint: str | None = None) -> lis
             "Authorization": f"Bearer {api_key}"
         }
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=12) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             body = json.loads(resp.read().decode("utf-8"))
             if not isinstance(body, dict) or "choices" not in body or not body["choices"]:
                 return None
@@ -66,7 +67,9 @@ def _call_meta_ai(prompt: str, api_key: str, endpoint: str | None = None) -> lis
                     return [str(item) for item in parsed if item]
             except Exception:
                 pass
-            return [content]
+            # Split lines if output as newline-separated bullets
+            lines = [l.strip().lstrip("-*0123456789. ") for l in content.split("\n") if l.strip()]
+            return lines if lines else [content]
     except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError, Exception):
         # Gracefully handle 401, 403, 429, connection errors, timeouts, or invalid payloads without logging or exposing secrets
         return None
@@ -197,14 +200,21 @@ def explain_investigation(
     api_key = os.getenv("MODEL_API_KEY") or os.getenv("META_AI_API_KEY")
 
     if api_key and api_key.strip():
-        # Attempt live Meta AI call
+        # Attempt live Meta AI call with minimum necessary structured synthetic demonstration evidence
         prompt = (
             f"Objective: {objective}\n"
-            f"Datasets: {[ds.name for ds in datasets]}\n"
-            f"Governance Decision: {combination_result.get('decision') if combination_result else 'N/A'}\n"
-            f"Governance Findings: {[f.detail if hasattr(f, 'detail') else f.get('detail') for f in (combination_result.get('findings') if combination_result else [])]}\n"
-            f"Privacy Risks: {[r.detail if hasattr(r, 'detail') else r.get('detail') for r in (privacy_result.get('risks') if privacy_result else [])]}\n"
-            f"Policy Violations: {[v for pol in policy_results for v in pol.get('violated_rules', [])]}"
+            f"Evaluated Datasets (Names & Classifications): {[(ds.name, getattr(ds, 'classification', 'INTERNAL')) for ds in datasets]}\n"
+            f"Deterministic Governance Decision: {combination_result.get('decision') if combination_result else 'N/A'}\n"
+            f"Deterministic Governance Findings: {[f.detail if hasattr(f, 'detail') else f.get('detail') for f in (combination_result.get('findings') if combination_result else [])]}\n"
+            f"Deterministic Privacy Risks: {[r.detail if hasattr(r, 'detail') else r.get('detail') for r in (privacy_result.get('risks') if privacy_result else [])]}\n"
+            f"Deterministic Policy Violations: {[v for pol in policy_results for v in pol.get('violated_rules', [])]}\n"
+            "Task: Synthesize and explain in plain English:\n"
+            "1. Why combining these datasets creates privacy exposure (e.g. linkage or sensitive attributes).\n"
+            "2. Why the requested purpose is restricted or requires review based on the findings.\n"
+            "3. What the deterministic findings establish.\n"
+            "4. What residual ambiguity or unknown details remain.\n"
+            "5. What safeguards an authorized Data Protection Officer (DPO) may consider (e.g. pseudonymization, filtering).\n"
+            "Note: You are strictly an explainer. You must NEVER approve, reject, unblock, or override any deterministic decision."
         )
         ai_resp = _call_meta_ai(prompt, api_key.strip())
         if ai_resp:

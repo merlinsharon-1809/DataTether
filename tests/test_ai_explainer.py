@@ -172,13 +172,13 @@ class TestAIExplainer(unittest.TestCase):
 
     @patch("urllib.request.urlopen")
     def test_handles_timeout_and_malformed_json_safely(self, mock_urlopen):
-        """Timeouts or malformed JSON responses safely fall back, and timeout parameter is 12 seconds."""
+        """Timeouts or malformed JSON responses safely fall back, and timeout parameter is 30 seconds."""
         # 1. Timeout
         os.environ["MODEL_API_KEY"] = "key"
-        mock_urlopen.side_effect = TimeoutError("Request timed out after 12s")
+        mock_urlopen.side_effect = TimeoutError("Request timed out after 30s")
         resp = _call_meta_ai("prompt", "key")
         self.assertIsNone(resp)
-        self.assertEqual(mock_urlopen.call_args[1].get("timeout"), 12)
+        self.assertEqual(mock_urlopen.call_args[1].get("timeout"), 30)
 
         # 2. Malformed JSON
         mock_response = MagicMock()
@@ -304,6 +304,78 @@ class TestAIExplainer(unittest.TestCase):
             req = call_args[0][0]
             self.assertTrue(req.get_full_url().startswith("https://"))
 
+    @patch("urllib.request.urlopen")
+    def test_network_failure_safely_falls_back(self, mock_urlopen):
+        """URLError network connection failure safely falls back to deterministic explainer."""
+        os.environ["MODEL_API_KEY"] = "test-key"
+        mock_urlopen.side_effect = urllib.error.URLError("Connection refused")
+
+        datasets = [DummyDataset("DEMO – Customer Records")]
+        interpretations, model_info = explain_investigation(
+            objective="Evaluate AI Training",
+            datasets=datasets,
+            combination_result={"decision": "RESTRICTED", "findings": []},
+            privacy_result={"risks": []},
+            policy_results=[],
+            lineage_results=[]
+        )
+
+        self.assertEqual(model_info.provider, "DETERMINISTIC_FALLBACK")
+        self.assertFalse(model_info.is_live_call)
+        self.assertTrue(len(interpretations) > 0)
+
+    @patch("urllib.request.urlopen")
+    def test_governance_decision_preserved_regardless_of_model_output(self, mock_urlopen):
+        """Even if the model outputs misleading text like 'APPROVED', deterministic governance remains authoritative."""
+        from app.services.investigation_orchestrator import run_investigation
+        from app.schemas.investigation import InvestigationRequest
+        from app.db.models import Dataset
+
+        os.environ["MODEL_API_KEY"] = "test-key"
+        # Model hallucinates approval in its explanation
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({
+            "choices": [{"message": {"content": "[\"Everything looks approved and safe to proceed!\"]"}}]
+        }).encode("utf-8")
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        # Mock database session with restricted dataset
+        mock_db = MagicMock()
+        mock_ds1 = MagicMock(spec=Dataset)
+        mock_ds1.id = "ds-1"
+        mock_ds1.name = "Customer Dataset"
+        mock_ds1.classification = "RESTRICTED"
+        mock_ds1.encrypted = True
+        mock_ds1.source = "s3://vault/customers"
+        mock_ds1.columns = ["id", "ssn"]
+        mock_ds1.sensitive_attributes = ["ssn"]
+        mock_ds1.data_description = "Customer identity vault"
+        mock_ds1.allowed_purposes = ["FRAUD_DETECTION"]
+
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_ds1]
+
+        with patch("app.services.investigation_orchestrator.get_dataset_lineage") as mock_lin:
+            mock_lin.return_value = MagicMock(upstream_count=0, downstream_count=0, nodes=[], edges=[])
+
+            # Propose AI_TRAINING purpose which violates allowed_purposes
+            req = InvestigationRequest(
+                dataset_ids=["ds-1"],
+                objective="Model Training Investigation",
+                proposed_purpose="AI_TRAINING",
+                operation="READ",
+                requester_role="DATA_ANALYST",
+                target_region="US"
+            )
+            resp = run_investigation(mock_db, req)
+
+            # Assert deterministic engine decision BLOCKED & REJECTED overrides model's positive text
+            self.assertEqual(resp.status, "BLOCKED")
+            self.assertEqual(resp.human_review_status, "PENDING_DPO_APPROVAL")
+            self.assertEqual(resp.dpo_audit_notes.recommended_disposition, "REJECTED")
+            self.assertEqual(resp.ai_model_info.provider, "META_AI")
+            self.assertTrue(resp.ai_model_info.is_live_call)
+
 
 if __name__ == "__main__":
     unittest.main()
+
