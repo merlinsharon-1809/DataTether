@@ -11,14 +11,26 @@ import { MOCK_LINEAGE_NODES, MOCK_LINEAGE_EDGES, MOCK_DATASETS } from '../data/m
 import type { ClassificationLevel, LineageNode, LineageEdge, Dataset } from '../types/index.ts';
 import { fetchDatasets, fetchDatasetLineage, mapBackendDatasetToFrontend } from '../services/api.ts';
 
+// Normalize an edge from either frontend {from,to} or backend {source_dataset_id,target_dataset_id}
+function normalizeEdge(e: any): { from: string; to: string } {
+  return {
+    from: e.from || e.source_dataset_id,
+    to: e.to || e.target_dataset_id,
+  };
+}
+
 // Layout helper: arrange nodes in a simple left-to-right DAG grid
 function layoutNodes(
-  nodes: Array<{ id: string; name: string; classification: string; isRoot: boolean; nodeType: string }>,
-  edges: Array<{ from: string; to: string }>
+  nodes: Array<{ id: string; name: string; classification: string; source?: string; owner?: string; isRoot?: boolean; nodeType?: string }>,
+  rawEdges: Array<any>,
+  rootDatasetId?: string
 ): LineageNode[] {
+  // Normalize edges so BFS works with both frontend and backend formats
+  const edges = rawEdges.map(normalizeEdge);
+
   // BFS to assign columns
   const colMap = new Map<string, number>();
-  const rootId = nodes.find((n) => n.isRoot)?.id || nodes[0]?.id;
+  const rootId = rootDatasetId || nodes.find((n) => n.isRoot)?.id || nodes[0]?.id;
   if (!rootId) return [];
 
   const queue = [rootId];
@@ -56,13 +68,12 @@ function layoutNodes(
     normalByCol.set(col - minCol, ids);
   }
 
-  const X_STEP = 240;
-  const Y_STEP = 100;
-  const X_BASE = 60;
-  const Y_BASE = 80;
+  const X_STEP = 390; // Card width 210px + 180px gap = 390px
+  const Y_STEP = 140; // Card height is ~110px, leaving 30px gap for multi-row
+  const X_BASE = 50;
+  const Y_BASE = 100;
 
   const positioned: LineageNode[] = [];
-  const posMap = new Map<string, { x: number; y: number }>();
 
   for (const [col, ids] of normalByCol) {
     ids.forEach((id, rowIdx) => {
@@ -70,7 +81,6 @@ function layoutNodes(
       if (!node) return;
       const x = X_BASE + col * X_STEP;
       const y = Y_BASE + rowIdx * Y_STEP;
-      posMap.set(id, { x, y });
 
       const classMap: Record<string, ClassificationLevel> = {
         RESTRICTED: 'RESTRICTED',
@@ -80,15 +90,24 @@ function layoutNodes(
       };
       const cls = classMap[node.classification?.toUpperCase()] || 'INTERNAL';
 
+      // Determine node type: use backend source/owner context when isRoot/nodeType are absent
+      const isRoot = node.id === rootId;
+      let nodeType: LineageNode['type'] = 'PROCESSED';
+      if (node.nodeType === 'DERIVED' || node.nodeType === 'AI_MODEL') {
+        nodeType = node.nodeType as LineageNode['type'];
+      } else if (isRoot) {
+        nodeType = 'SOURCE';
+      }
+
       positioned.push({
         id: node.id,
         label: node.name,
-        type: node.nodeType === 'DERIVED' ? 'DERIVED' : node.isRoot ? 'SOURCE' : 'PROCESSED',
+        type: nodeType,
         classification: cls,
         governanceStatus: cls === 'RESTRICTED' ? 'RESTRICTED' : cls === 'CONFIDENTIAL' ? 'FLAGGED' : 'COMPLIANT',
         x,
         y,
-        storage: `backend/${node.id}`,
+        storage: (node as any).source || `backend/${node.id}`,
         recordCount: 'Live data',
         copiesCount: 0
       });
@@ -118,7 +137,7 @@ export const LineagePage: React.FC = () => {
           setSelectedRootId(mapped[0].id);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Load lineage for selected root
@@ -129,7 +148,7 @@ export const LineagePage: React.FC = () => {
     fetchDatasetLineage(selectedRootId, direction)
       .then((graph) => {
         if (graph && graph.nodes && graph.nodes.length > 0) {
-          const laidOut = layoutNodes(graph.nodes, graph.edges || []);
+          const laidOut = layoutNodes(graph.nodes, graph.edges || [], graph.root_dataset_id);
           setNodes(laidOut.length > 0 ? laidOut : MOCK_LINEAGE_NODES);
           const mappedEdges: LineageEdge[] = (graph.edges || []).map((e: any, i: number) => ({
             id: `edge-${i}`,
@@ -180,7 +199,6 @@ export const LineagePage: React.FC = () => {
   for (const n of nodes) {
     nodePositions.set(n.id, { cx: n.x + 105, cy: n.y + 45 });
   }
-
   return (
     <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Header */}
@@ -232,7 +250,8 @@ export const LineagePage: React.FC = () => {
             backgroundImage: 'radial-gradient(circle at 1px 1px, #162032 1px, transparent 0)',
             backgroundSize: '24px 24px',
             padding: '24px',
-            overflow: 'hidden'
+            overflowX: 'auto',
+            overflowY: 'hidden'
           }}
         >
           {/* Canvas Sub-header */}
@@ -253,58 +272,90 @@ export const LineagePage: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* SVG Connection Lines - drawn between computed node centers */}
-              <svg
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  pointerEvents: 'none',
-                  zIndex: 1
-                }}
-              >
-                <defs>
-                  <linearGradient id="cyanLine" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#00e5c9" stopOpacity="0.4" />
-                    <stop offset="100%" stopColor="#00e5c9" stopOpacity="0.9" />
-                  </linearGradient>
-                  <marker
-                    id="arrowhead"
-                    markerWidth="8"
-                    markerHeight="6"
-                    refX="7"
-                    refY="3"
-                    orient="auto"
-                  >
-                    <polygon points="0 0, 8 3, 0 6" fill="#00e5c9" />
-                  </marker>
-                </defs>
+              {/* Graph container — SVG and nodes share the same coordinate origin */}
+              {(() => {
+                const maxNodeX = nodes.reduce((max, n) => Math.max(max, n.x + 230), 650);
+                const maxNodeY = nodes.reduce((max, n) => Math.max(max, n.y + 150), 450);
+                return (
+                  <div style={{ position: 'relative', minHeight: `${maxNodeY}px`, minWidth: `${maxNodeX}px` }}>
+                    {/* SVG Connection Lines */}
+                    <svg
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        pointerEvents: 'none',
+                        zIndex: 1
+                      }}
+                    >
+                  <defs>
+                    <marker
+                      id="arrowhead"
+                      markerWidth="10"
+                      markerHeight="10"
+                      refX="6"
+                      refY="3.5"
+                      orient="auto"
+                    >
+                      <polygon points="0 0, 10 3.5, 0 7" fill="#00e5c9" />
+                    </marker>
+                  </defs>
 
-                {edges.map((edge) => {
-                  const from = nodePositions.get(edge.from);
-                  const to = nodePositions.get(edge.to);
-                  if (!from || !to) return null;
-                  const midX = (from.cx + to.cx) / 2;
-                  const isRestricted =
-                    nodes.find((n) => n.id === edge.to)?.classification === 'RESTRICTED';
-                  return (
-                    <path
-                      key={edge.id}
-                      d={`M ${from.cx} ${from.cy} C ${midX} ${from.cy}, ${midX} ${to.cy}, ${to.cx} ${to.cy}`}
-                      fill="none"
-                      stroke={isRestricted ? '#ef4444' : 'url(#cyanLine)'}
-                      strokeWidth={isRestricted ? 2.5 : 2}
-                      strokeDasharray={isRestricted ? undefined : '4 2'}
-                      markerEnd="url(#arrowhead)"
-                    />
-                  );
-                })}
-              </svg>
+                  {edges.map((edge) => {
+                    const from = nodePositions.get(edge.from);
+                    const to = nodePositions.get(edge.to);
+                    if (!from || !to) return null;
 
-              {/* Nodes Container */}
-              <div style={{ position: 'relative', zIndex: 10, minHeight: '450px' }}>
+                    // Start at the right edge of the source node card and end at the left edge of the target node card
+                    // Node card width is 210px, node.x is center - 105
+                    const startX = from.cx + 105;
+                    const startY = from.cy;
+                    const endX = to.cx - 105;
+                    const endY = to.cy;
+                    const midX = (startX + endX) / 2;
+
+                    const isRestricted =
+                      nodes.find((n) => n.id === edge.to)?.classification === 'RESTRICTED';
+
+                    return (
+                      <g key={edge.id}>
+                        <path
+                          d={`M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`}
+                          fill="none"
+                          stroke={isRestricted ? '#ef4444' : '#00e5c9'}
+                          strokeWidth={2.5}
+                          markerEnd="url(#arrowhead)"
+                        />
+                        {edge.label && (
+                          <g transform={`translate(${midX}, ${(startY + endY) / 2 - 12})`}>
+                            <rect
+                              x="-45"
+                              y="-10"
+                              width="90"
+                              height="20"
+                              rx="4"
+                              fill="#0b1325"
+                              stroke="var(--border-subtle)"
+                              strokeWidth="1"
+                            />
+                            <text
+                              textAnchor="middle"
+                              dominantBaseline="central"
+                              fill="var(--accent-cyan)"
+                              fontSize="10"
+                              fontWeight="600"
+                              fontFamily="var(--font-mono)"
+                            >
+                              {edge.label}
+                            </text>
+                          </g>
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
                 {nodes.map((node) => {
                   const isSelected = selectedNodeId === node.id;
                   return (
@@ -315,6 +366,7 @@ export const LineagePage: React.FC = () => {
                         position: 'absolute',
                         left: `${node.x}px`,
                         top: `${node.y}px`,
+                        zIndex: 10,
                         width: '210px',
                         padding: '12px 14px',
                         borderRadius: 'var(--radius-sm)',
@@ -323,8 +375,8 @@ export const LineagePage: React.FC = () => {
                         borderColor: isSelected
                           ? 'var(--accent-cyan)'
                           : node.classification === 'RESTRICTED'
-                          ? 'var(--accent-red-border)'
-                          : 'var(--border-subtle)',
+                            ? 'var(--accent-red-border)'
+                            : 'var(--border-subtle)',
                         boxShadow: isSelected
                           ? '0 0 16px rgba(0, 229, 201, 0.35)'
                           : '0 4px 12px rgba(0,0,0,0.5)',
@@ -362,9 +414,11 @@ export const LineagePage: React.FC = () => {
                   );
                 })}
               </div>
-            </>
-          )}
-        </div>
+            );
+          })()}
+        </>
+        )}
+      </div>
 
         {/* Node Inspector Drawer */}
         {selectedNode && (

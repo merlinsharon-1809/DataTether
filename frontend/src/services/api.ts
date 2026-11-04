@@ -346,13 +346,37 @@ export async function fetchDatasetLineage(datasetId: string, direction: 'upstrea
   return res.json();
 }
 
+import type { StorageConnection, StorageScanResult } from '../types/index.ts';
+
 /**
- * Fetch all storage connections
+ * Fetch all storage connections with live-evaluated status.
+ * Status reflects whether credentials are present in the backend env —
+ * not whether a real connection has been tested yet.
  */
-export async function fetchStorageConnections() {
+export async function fetchStorageConnections(): Promise<StorageConnection[]> {
   const res = await fetch(`${API_BASE_URL}/api/storage/connections`);
   if (!res.ok) {
     throw new Error(`Failed to load storage connections: HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Trigger a real scan of one storage connection.
+ * For SIMULATED connections: returns the curated demo dataset index.
+ * For CONFIGURED connections: attempts a live boto3 scan.
+ * For DISCONNECTED connections: returns an empty result with explanation.
+ * On any error: returns status=ERROR with a plain-English status_detail.
+ *
+ * Never downloads file contents. Never exposes credentials in the response.
+ */
+export async function scanStorageConnection(connectionId: string): Promise<StorageScanResult> {
+  const res = await fetch(`${API_BASE_URL}/api/storage/scan/${connectionId}`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Storage scan failed: HTTP ${res.status}`);
   }
   return res.json();
 }

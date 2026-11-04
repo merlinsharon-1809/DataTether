@@ -100,10 +100,44 @@ export interface StorageConnection {
   name: string;
   provider: 'MinIO' | 'AWS S3' | 'Google Cloud Storage' | 'Azure Blob';
   endpoint: string;
-  bucketCount: number;
-  status: 'CONNECTED' | 'DISCONNECTED' | 'DEGRADED';
-  isLocal: boolean;
+  bucket_count: number;
+  /** Legacy camelCase alias for mock data / older components */
+  bucketCount?: number;
+  /** CONFIGURED = credentials present, not yet confirmed live.
+   *  SIMULATED   = local provider, demo data returned.
+   *  DISCONNECTED = cloud provider, no credentials.
+   *  CONNECTED   = last scan succeeded.
+   *  ERROR       = last scan failed. */
+  status: 'CONNECTED' | 'DISCONNECTED' | 'SIMULATED' | 'CONFIGURED' | 'ERROR';
+  is_local: boolean;
+  /** Legacy camelCase alias for mock data / older components */
+  isLocal?: boolean;
   notes: string;
+}
+
+export interface DiscoveredDataset {
+  file_path: string;
+  bucket: string;
+  file_name: string;
+  file_format: string;
+  size_bytes: number;
+  record_count: number;
+  suggested_columns: string[];
+  suggested_classification: string;
+  is_already_registered: boolean;
+  registered_dataset_id: string | null;
+  /** True when this item comes from the curated demo list, not a real S3 scan. */
+  is_simulated: boolean;
+}
+
+export interface StorageScanResult {
+  connection_id: string;
+  scanned_at: string;
+  status: 'CONNECTED' | 'SIMULATED' | 'DISCONNECTED' | 'ERROR';
+  status_detail: string;
+  files_found: number;
+  new_unregistered_count: number;
+  items: DiscoveredDataset[];
 }
 
 export interface EvaluationRequest {

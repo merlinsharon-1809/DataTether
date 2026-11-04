@@ -114,8 +114,8 @@ source .venv/bin/activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Run backend API server (runs on http://127.0.0.1:8000)
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+# Run backend API server (runs on http://127.0.0.1:8001)
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
 ### 2. Frontend Setup
@@ -126,11 +126,11 @@ cd frontend
 # Install npm packages
 npm install
 
-# Start Vite dev server (runs on http://localhost:5173)
+# Start Vite dev server (runs on http://127.0.0.1:5174)
 npm run dev
 ```
 
-Visit **http://localhost:5173** to launch the DataTether Governance Portal.
+Visit **http://127.0.0.1:5174** to launch the DataTether Governance Portal.
 
 ---
 
@@ -149,11 +149,23 @@ python tests/test_smoke.py
 |---|---|---|
 | `GET` | `/api/health` | Backend health and service status |
 | `GET` / `POST` | `/api/datasets` | Dataset registration and passport listing |
-| `POST` | `/api/combination/analyze` | Compound privacy and quasi-identifier linkage analysis |
-| `POST` | `/api/policies/evaluate` | Evaluates proposed data usage against policies |
+| `POST` | `/api/combination/analyse` | Compound privacy and quasi-identifier linkage analysis |
+| `POST` | `/api/policy/evaluate` | Evaluates proposed data usage against policies |
 | `GET` / `POST` | `/api/lineage` | Lineage node and edge graph querying |
-| `POST` | `/api/investigations/run` | Executes 5-stage automated governance investigation |
-| `GET` | `/api/investigations/{id}` | Fetches investigation audit report and evidence quadrants |
+| `POST` | `/api/investigation/run` | Executes 5-stage automated governance investigation |
+| `GET` | `/api/storage/connections` | Discovers cloud and local object storage connections |
+
+---
+
+## ⚠️ Architectural Disclosures & Operational Scope
+
+DataTether prioritizes complete architectural truthfulness and governance integrity:
+
+1. **Deterministic AI Fallback:** Live external Meta AI API endpoints are not operationally verified for production inference. The platform uses a verified, highly structured **Deterministic Governance Explainer** (`DETERMINISTIC_FALLBACK`) which synthesizes four structured evidence quadrants deterministically.
+2. **In-Memory Investigation Dossiers:** Investigation runs (`POST /api/investigation/run`) are computed in-memory and returned immediately. Investigation records are ephemeral demonstration dossiers and are not persisted to a database table.
+3. **Simulated DPO Workflow:** DPO Approval/Rejection buttons in the web interface are client-side user experience simulations demonstrating governance disposition; they do not alter persistent backend database state.
+4. **Demonstration Audit Logs:** The Audit Logs view provides static demonstration events for interface evaluation; persistent event logging is not currently backed by a database table.
+5. **Storage Discovery Metadata:** Storage discovery for AWS S3 and MinIO inspects bucket object keys, paths, and byte sizes. It does not download or inspect raw CSV contents or row-level data.
 
 ---
 

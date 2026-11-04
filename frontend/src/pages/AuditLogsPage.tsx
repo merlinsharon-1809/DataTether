@@ -60,6 +60,26 @@ export const AuditLogsPage: React.FC = () => {
         </button>
       </div>
 
+      {/* Demonstration Notice */}
+      <div
+        style={{
+          padding: '10px 14px',
+          backgroundColor: 'rgba(255, 179, 0, 0.08)',
+          border: '1px solid var(--accent-amber)',
+          borderRadius: 'var(--radius-sm)',
+          fontSize: '12px',
+          color: 'var(--text-bright)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}
+      >
+        <AlertTriangle size={15} style={{ color: 'var(--accent-amber)', flexShrink: 0 }} />
+        <div>
+          <strong>Demonstration Mode:</strong> These audit entries are static sample data for interface demonstration. They are not persisted backend audit events.
+        </div>
+      </div>
+
       {/* Search & Filter Bar */}
       <div
         className="terminal-card"

@@ -527,8 +527,10 @@ export const MOCK_STORAGE_CONNECTIONS: StorageConnection[] = [
     name: 'Local MinIO Storage',
     provider: 'MinIO',
     endpoint: 'http://localhost:9000 (Local Docker / Service)',
+    bucket_count: 5,
     bucketCount: 5,
     status: 'CONNECTED',
+    is_local: true,
     isLocal: true,
     notes: 'Primary local development bucket cluster. Contains 5 synthetic datasets.'
   },
@@ -537,8 +539,10 @@ export const MOCK_STORAGE_CONNECTIONS: StorageConnection[] = [
     name: 'AWS S3 Enterprise Lake',
     provider: 'AWS S3',
     endpoint: 's3://datatether-corp-data-lake-prod',
+    bucket_count: 0,
     bucketCount: 0,
     status: 'DISCONNECTED',
+    is_local: false,
     isLocal: false,
     notes: 'Production cloud connection disabled in local development mode. Credentials not configured.'
   }

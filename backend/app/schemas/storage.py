@@ -1,17 +1,23 @@
-from datetime import datetime
 from pydantic import BaseModel, field_validator
 
 
 class StorageConnectionResponse(BaseModel):
     """
     Metadata about a registered storage system or data lake connection.
+
+    status values:
+      CONFIGURED   - Credentials found in env; scan will attempt a live connection.
+      SIMULATED    - Local provider, no credentials; demo data will be returned.
+      DISCONNECTED - Cloud provider, no credentials configured.
+      CONNECTED    - Last scan succeeded (returned after a successful scan).
+      ERROR        - Last scan failed (returned after a failed scan attempt).
     """
     id: str
     name: str
-    provider: str  # 'MinIO', 'AWS S3', 'Google Cloud Storage', 'Azure Blob', 'LocalFS'
+    provider: str       # 'MinIO', 'AWS S3', 'Google Cloud Storage', 'Azure Blob', 'LocalFS'
     endpoint: str
     bucket_count: int
-    status: str    # 'CONNECTED', 'DISCONNECTED', 'DEGRADED'
+    status: str
     is_local: bool
     notes: str
 
@@ -19,6 +25,9 @@ class StorageConnectionResponse(BaseModel):
 class DiscoveredDataset(BaseModel):
     """
     A data file identified in an object storage bucket or cluster.
+
+    is_simulated=True means the item comes from the demo dataset list and
+    does NOT represent a real file discovered by a live storage scan.
     """
     file_path: str
     bucket: str
@@ -30,14 +39,20 @@ class DiscoveredDataset(BaseModel):
     suggested_classification: str = "INTERNAL"
     is_already_registered: bool = False
     registered_dataset_id: str | None = None
+    is_simulated: bool = False      # True only when returned from demo/fallback mode
 
 
 class StorageScanResponse(BaseModel):
     """
     Result of scanning a storage cluster for unmanaged or updated datasets.
+
+    status values mirror StorageConnectionResponse.status.
+    status_detail is a plain-English explanation always safe to display.
     """
     connection_id: str
     scanned_at: str
+    status: str                     # CONNECTED | SIMULATED | DISCONNECTED | ERROR
+    status_detail: str = ""         # Human-readable explanation — never contains credentials
     files_found: int
     new_unregistered_count: int
     items: list[DiscoveredDataset]

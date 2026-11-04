@@ -73,9 +73,13 @@ def create_lineage_relationship(
         transformation_type=request.transformation_type,
         description=request.description,
     )
-    db.add(rel)
-    db.commit()
-    db.refresh(rel)
+    try:
+        db.add(rel)
+        db.commit()
+        db.refresh(rel)
+    except Exception:
+        db.rollback()
+        raise
 
     return rel
 

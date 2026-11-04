@@ -23,8 +23,7 @@ export const UsageEvaluatorPage: React.FC = () => {
   const [purpose, setPurpose] = useState('AI model training');
   const [operation, setOperation] = useState<'READ' | 'AGGREGATE' | 'EXPORT' | 'RETRAIN_MODEL'>('RETRAIN_MODEL');
   const [requesterRole, setRequesterRole] = useState('Data Science Team');
-  const [targetRegion, setTargetRegion] = useState('EU (Frankfurt)');
-  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [targetRegion, setTargetRegion] = useState('eu-central-1'); const [isEvaluating, setIsEvaluating] = useState(false);
   const [result, setResult] = useState<PolicyEvaluationResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -93,8 +92,8 @@ export const UsageEvaluatorPage: React.FC = () => {
     result?.decision === 'RESTRICTED'
       ? '1px solid var(--accent-red-border)'
       : result?.decision === 'PERMITTED'
-      ? '1px solid var(--accent-green-border, #1a4a2e)'
-      : '1px solid var(--border-subtle)';
+        ? '1px solid var(--accent-green-border, #1a4a2e)'
+        : '1px solid var(--border-subtle)';
 
   return (
     <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -187,7 +186,7 @@ export const UsageEvaluatorPage: React.FC = () => {
                   value={targetRegion}
                   onChange={(e) => setTargetRegion(e.target.value)}
                 >
-                  <option value="EU (Frankfurt)">EU (Frankfurt)</option>
+                  <option value="eu-central-1">EU (Frankfurt)</option>
                   <option value="US-East (Virginia)">US-East (Virginia)</option>
                   <option value="APAC (Singapore)">APAC (Singapore)</option>
                   <option value="External Cloud VPC">External Cloud VPC</option>

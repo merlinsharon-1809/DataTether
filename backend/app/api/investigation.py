@@ -27,7 +27,7 @@ def execute_investigation(
     - Stage 2: Deterministic Risk Analysis (Combination Engine, Privacy Engine)
     - Stage 3: Policy Evaluation (Operations, Regions, Access)
     - Stage 4: AI Interpretation & Synthesis (Meta AI / Deterministic Explainer)
-    - Stage 5: Human Review & DPO Sign-Off (IN_PROGRESS if review required)
+    - Stage 5: Human Review & DPO Sign-Off (PENDING if review required)
     """
     try:
         return run_investigation(db, request)

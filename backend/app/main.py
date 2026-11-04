@@ -1,3 +1,12 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Automatically load local .env located alongside backend
+_backend_env = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=_backend_env)
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.datasets import router as datasets_router
@@ -23,7 +32,10 @@ app.include_router(investigation_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+    "http://localhost:5173",
+    "http://localhost:5174",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

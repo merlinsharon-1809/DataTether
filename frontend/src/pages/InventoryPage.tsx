@@ -258,13 +258,12 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
                   </td>
                   <td>
                     <span
-                      className={`badge ${
-                        ds.governanceStatus === 'COMPLIANT'
+                      className={`badge ${ds.governanceStatus === 'COMPLIANT'
                           ? 'badge-green'
                           : ds.governanceStatus === 'NEEDS_REVIEW'
-                          ? 'badge-amber'
-                          : 'badge-red'
-                      }`}
+                            ? 'badge-amber'
+                            : 'badge-red'
+                        }`}
                     >
                       {ds.governanceStatus === 'FLAGGED' && <ShieldAlert size={10} />}
                       {ds.governanceStatus}
@@ -305,7 +304,7 @@ export const InventoryPage: React.FC<InventoryPageProps> = ({
           fontFamily: 'var(--font-mono)'
         }}
       >
-        <span>Displaying {filteredDatasets.length} of {MOCK_DATASETS.length} datasets cataloged</span>
+        <span>Displaying {filteredDatasets.length} of {datasetsList.length} datasets cataloged</span>
         <span>Storage Cluster: local-docker-minio (AES-256)</span>
       </div>
     </div>

@@ -9,7 +9,7 @@ and drafts DPO audit notes.
 Rules enforced:
 1. Observed facts come 100% from database records.
 2. Tool analysis comes 100% from deterministic engines (Combination, Privacy, Policy).
-3. If DPO review is needed, Stage 5 is IN_PROGRESS (never COMPLETED without human sign-off).
+3. If DPO review is needed, Stage 5 is PENDING (never COMPLETED without human sign-off).
 4. Deterministic engine decisions govern the final disposition; AI never overrides them.
 """
 
@@ -127,6 +127,7 @@ def run_investigation(db: Session, request: InvestigationRequest) -> Investigati
             requester_role=request.requester_role,
             target_region=request.target_region
         )
+        pol["dataset_name"] = ds.name
         policy_results.append(pol)
 
     stages.append(InvestigationStage(
@@ -163,7 +164,11 @@ def run_investigation(db: Session, request: InvestigationRequest) -> Investigati
     # -------------------------------------------------------------------------
     observed_facts = [
         f"Target dataset(s): {', '.join(ds.name for ds in datasets)}.",
-        f"Storage source(s): {', '.join(ds.source for ds in datasets)}.",
+        (
+            "Registered Data Passport source(s): "
+            + ", ".join(ds.source for ds in datasets)
+            + " [declared database metadata — physical location not independently verified by this investigation]."
+        ),
         f"Classification(s): {', '.join(f'{ds.name} ({ds.classification})' for ds in datasets)}.",
         f"At-rest encryption: {', '.join(('Encrypted' if ds.encrypted else 'Unencrypted') for ds in datasets)}.",
     ]
@@ -203,6 +208,15 @@ def run_investigation(db: Session, request: InvestigationRequest) -> Investigati
             unknown_information.append(f"Dataset '{ds.name}' has no registered columns in Data Passport; internal schema unverified.")
     for pol in policy_results:
         unknown_information.extend(pol.get("missing_information", []))
+    # Storage verification gap: the investigation reads only Data Passport metadata;
+    # it never performs a live storage scan or consumes persisted scan evidence.
+    for ds in datasets:
+        unknown_information.append(
+            f"Dataset '{ds.name}': the Data Passport records registered source path '{ds.source}' "
+            "as declared database metadata. The investigation has not independently verified "
+            "physical existence at that path. This investigation does not consume persisted "
+            "storage scan evidence."
+        )
     if not unknown_information:
         unknown_information.append("All primary governance metadata fields present and accounted for.")
 
@@ -281,7 +295,16 @@ def run_investigation(db: Session, request: InvestigationRequest) -> Investigati
             "Operation Scope Validation (READ/EXPORT/RETRAIN)",
             "Cross-Region Residency Check"
         ],
-        verified_evidence=observed_facts[:3],
+        verified_evidence=[
+            (
+                f"Dataset '{ds.name}' (ID: {ds.id}) — "
+                f"Classification: {ds.classification}, "
+                f"At-rest encryption: {'Encrypted' if ds.encrypted else 'Unencrypted'}. "
+                f"Registered Data Passport source: '{ds.source}' "
+                "[declared metadata only — physical storage not independently verified by this investigation]."
+            )
+            for ds in datasets
+        ],
         ai_interpretation_summary=(
             f"Evaluated by {ai_model_info.model_name}. "
             + ("Restrictions found; raw processing denied." if has_hard_restriction else "Processing permissible with recommended governance conditions.")

@@ -45,10 +45,10 @@ cp .env.example .env
 
 ### Step 5: Start the Backend Server
 ```bash
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
 ```
-- API Base URL: `http://127.0.0.1:8000`
-- Interactive OpenAPI Docs: `http://127.0.0.1:8000/docs`
+- API Base URL: `http://127.0.0.1:8001`
+- Interactive OpenAPI Docs: `http://127.0.0.1:8001/docs`
 
 ---
 
@@ -68,14 +68,22 @@ npm install
 ```bash
 npm run dev
 ```
-The application will launch at **`http://localhost:5173`**.
+The application will launch at **`http://127.0.0.1:5174`**.
 
 ---
 
-## 3. Verifying the Setup
+## 3. Operational Disclosures & Scope
+- **AI Explainer:** Operates via a resilient, verified local Deterministic Governance Explainer (`DETERMINISTIC_FALLBACK`); external live Meta AI endpoints are not operationally verified.
+- **Investigations:** Evaluated dynamically in-memory; results are ephemeral demonstration dossiers and not persisted to SQLite.
+- **DPO Actions & Audit Logs:** DPO action buttons and audit logs operate as client-side user experience demonstrations.
+- **Storage Discovery:** Inspects object paths, keys, and sizes; does not inspect or download raw CSV contents.
+
+---
+
+## 4. Verifying the Setup
 
 Run the automated smoke test from the root directory:
 ```bash
 python tests/test_smoke.py
 ```
-If both tests return `PASS`, your DataTether stack is completely operational!
+If the tests return `PASS`, your DataTether stack is completely operational!

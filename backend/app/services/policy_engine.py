@@ -30,6 +30,9 @@ def evaluate_usage(
           - evaluated_at: UTC timestamp ISO string
     """
     purpose = proposed_purpose.strip().casefold()
+
+    # Normalize the UI wording to the canonical Data Passport purpose.
+    purpose = purpose.replace("ai model training", "ai training")    
     op = (operation or "READ").strip().upper()
     classification = (dataset.classification or "INTERNAL").strip().upper()
 

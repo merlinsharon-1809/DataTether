@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Database,
   Lock,
@@ -18,6 +18,7 @@ import {
   MOCK_STORAGE_CONNECTIONS,
   MOCK_INVESTIGATIONS
 } from '../data/mockData.ts';
+import { fetchDatasets } from '../services/api.ts';
 
 interface OverviewPageProps {
   onNavigate: (tab: NavItem) => void;
@@ -28,6 +29,33 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   onNavigate,
   onSelectDatasetForPassport
 }) => {
+  const [liveDatasetCount, setLiveDatasetCount] = useState<number | null>(null);
+  const [isCountLoading, setIsCountLoading] = useState<boolean>(true);
+  const [countError, setCountError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchDatasets()
+      .then((items) => {
+        if (isMounted) {
+          setLiveDatasetCount(items.length);
+          setIsCountLoading(false);
+          setCountError(null);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          console.warn('Failed to fetch live datasets for Overview count:', err);
+          setIsCountLoading(false);
+          setCountError('Live data unavailable');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const totalDatasets = MOCK_DATASETS.length;
   const restrictedDatasets = MOCK_DATASETS.filter(
     (d) => d.classification === 'RESTRICTED' || d.classification === 'CONFIDENTIAL'
@@ -80,10 +108,16 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
             <Database size={15} style={{ color: 'var(--accent-cyan)' }} />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-bright)', marginTop: '8px', fontFamily: 'var(--font-mono)' }}>
-            {totalDatasets}
+            {isCountLoading ? (
+              <span style={{ fontSize: '18px', color: 'var(--text-muted)' }}>Loading…</span>
+            ) : countError ? (
+              <span style={{ fontSize: '13px', color: 'var(--accent-amber)' }}>{countError}</span>
+            ) : (
+              liveDatasetCount
+            )}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Across 2 storage buckets (Local MinIO)
+            {countError ? 'Backend count unavailable' : 'Authoritative registered datasets'}
           </div>
         </div>
 
@@ -231,7 +265,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                       <span style={{ fontWeight: 600, color: 'var(--text-bright)', fontSize: '13px' }}>
                         {storage.name}
                       </span>
-                      {storage.isLocal && <span className="badge badge-neutral" style={{ fontSize: '9.5px' }}>LOCAL</span>}
+                      {(storage.is_local ?? storage.isLocal) && <span className="badge badge-neutral" style={{ fontSize: '9.5px' }}>LOCAL</span>}
                     </div>
                     <span className={`badge ${isConnected ? 'badge-green' : 'badge-neutral'}`} style={{ fontSize: '10px' }}>
                       {storage.status}

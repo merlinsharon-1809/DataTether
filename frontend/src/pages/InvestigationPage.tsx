@@ -29,7 +29,7 @@ export const InvestigationPage: React.FC = () => {
   const [purpose, setPurpose] = useState('AI model training');
   const [operation, setOperation] = useState('RETRAIN_MODEL');
   const [requesterRole, setRequesterRole] = useState('Data Science Team');
-  const [targetRegion, setTargetRegion] = useState('EU (Frankfurt)');
+  const [targetRegion, setTargetRegion] = useState('eu-central-1');
 
   // Result state
   const [isRunning, setIsRunning] = useState(false);
@@ -103,21 +103,21 @@ export const InvestigationPage: React.FC = () => {
   // Fallback to mock if no result yet
   const displayData = result
     ? {
-        id: result.id,
-        objective: result.objective,
-        datasets: result.datasets,
-        createdAt: new Date(result.createdAt).toLocaleString(),
-        status: result.status,
-        stages: result.stages,
-        observedFacts: result.observedFacts,
-        toolAnalysis: result.toolAnalysis,
-        aiInterpretation: result.aiInterpretation,
-        unknownInformation: result.unknownInformation,
-        recommendations: result.recommendations,
-        aiProvider: result.aiModelInfo?.provider,
-        isLiveCall: result.aiModelInfo?.isLiveCall,
-        dpoAuditNotes: result.dpoAuditNotes
-      }
+      id: result.id,
+      objective: result.objective,
+      datasets: result.datasets,
+      createdAt: new Date(result.createdAt).toLocaleString(),
+      status: result.status,
+      stages: result.stages,
+      observedFacts: result.observedFacts,
+      toolAnalysis: result.toolAnalysis,
+      aiInterpretation: result.aiInterpretation,
+      unknownInformation: result.unknownInformation,
+      recommendations: result.recommendations,
+      aiProvider: result.aiModelInfo?.provider,
+      isLiveCall: result.aiModelInfo?.isLiveCall,
+      dpoAuditNotes: result.dpoAuditNotes
+    }
     : null;
 
   const mockDisplay = MOCK_INVESTIGATIONS[0];
@@ -250,7 +250,7 @@ export const InvestigationPage: React.FC = () => {
               <div className="input-group">
                 <label className="input-label">Target Region</label>
                 <select className="select-field" value={targetRegion} onChange={(e) => setTargetRegion(e.target.value)}>
-                  <option value="EU (Frankfurt)">EU (Frankfurt)</option>
+                  <option value="eu-central-1">EU (Frankfurt)</option>
                   <option value="US-East (Virginia)">US-East (Virginia)</option>
                   <option value="APAC (Singapore)">APAC (Singapore)</option>
                 </select>
@@ -492,10 +492,13 @@ export const InvestigationPage: React.FC = () => {
                       </span>
                     </div>
                     <div style={{ marginTop: '6px', fontSize: '11.5px' }}>
-                      <strong>Recommended Disposition:</strong>{' '}
+                      <strong>Algorithm-Recommended Disposition:</strong>{' '}
                       <span style={{ color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
                         {inv.dpoAuditNotes.recommendedDisposition}
                       </span>
+                      <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', marginTop: '3px', fontStyle: 'italic' }}>
+                        Machine-generated recommendation only — not an official human decision.
+                      </div>
                     </div>
                   </div>
                 )}
@@ -509,15 +512,14 @@ export const InvestigationPage: React.FC = () => {
                     <span>Official Human Review Status</span>
                   </div>
                   <span
-                    className={`badge ${
-                      dpoStatus === 'APPROVED_WITH_CONDITIONS'
-                        ? 'badge-green'
-                        : dpoStatus === 'REJECTED'
+                    className={`badge ${dpoStatus === 'APPROVED_WITH_CONDITIONS'
+                      ? 'badge-green'
+                      : dpoStatus === 'REJECTED'
                         ? 'badge-red'
                         : dpoStatus === 'NOT_REQUIRED'
-                        ? 'badge-neutral'
-                        : 'badge-amber'
-                    }`}
+                          ? 'badge-neutral'
+                          : 'badge-amber'
+                      }`}
                   >
                     {dpoStatus.replace(/_/g, ' ')}
                   </span>

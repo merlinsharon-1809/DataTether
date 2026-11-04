@@ -20,6 +20,18 @@ def create_dataset(
     dataset: DatasetCreate,
     db: Session = Depends(get_db)
 ):
+    # Check if a dataset with this exact name or source already exists
+    existing = (
+        db.query(Dataset)
+        .filter((Dataset.name == dataset.name) | (Dataset.source == dataset.source))
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Dataset with name '{dataset.name}' or source '{dataset.source}' already exists (ID: {existing.id})."
+        )
+
     new_dataset = Dataset(
         id=str(uuid4()),
         name=dataset.name,
@@ -37,9 +49,13 @@ def create_dataset(
         data_description=dataset.data_description,
     )
 
-    db.add(new_dataset)
-    db.commit()
-    db.refresh(new_dataset)
+    try:
+        db.add(new_dataset)
+        db.commit()
+        db.refresh(new_dataset)
+    except Exception:
+        db.rollback()
+        raise
 
     return new_dataset
 
@@ -85,7 +101,11 @@ def update_dataset(
     for key, value in update_data.items():
         setattr(dataset, key, value)
 
-    db.commit()
-    db.refresh(dataset)
+    try:
+        db.commit()
+        db.refresh(dataset)
+    except Exception:
+        db.rollback()
+        raise
 
     return dataset

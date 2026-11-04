@@ -51,6 +51,9 @@ def analyse_combination(
     findings: list[CombinationFinding] = []
     purpose = proposed_purpose.strip().casefold()
 
+    # Normalize UI wording to the canonical Data Passport purpose.
+    purpose = purpose.replace("ai model training", "ai training")
+
     # ------------------------------------------------------------------ #
     # 1. Build per-dataset purpose sets and governance attributes          #
     # ------------------------------------------------------------------ #

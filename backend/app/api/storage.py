@@ -77,8 +77,12 @@ def register_discovered_dataset(
         data_description=request.data_description,
     )
 
-    db.add(new_dataset)
-    db.commit()
-    db.refresh(new_dataset)
+    try:
+        db.add(new_dataset)
+        db.commit()
+        db.refresh(new_dataset)
+    except Exception:
+        db.rollback()
+        raise
 
     return new_dataset
